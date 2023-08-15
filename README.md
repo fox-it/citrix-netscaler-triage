@@ -153,14 +153,30 @@ md0.img                        100%  530MB   6.6MB/s   01:20
 
 If you prefer not to write the disk image to `/var/tmp`, you can also stream the disk image directly over SSH to your own machine without touching the disk of the NetScaler device:
 
-```
+```shell
 local $ ssh nsroot@<NETSCALER-IP> shell dd if=/dev/md0 bs=10M > md0.img
 ```
 
 Do note that the builtin shell of NetScaler outputs a ` Done\n` message before and after your command to stdout, so this needs to be stripped from the file.
 
+This can be done using the following oneliner:
+
+```shell
+local $ cat md0.img | tail -c +7 | head -c -6 > md0.img.fixed
+```
+
+- `tail -c +7` skips the first 6 bytes (yes this needs to be +7)
+- `head -c -6` skips the last 6 bytes
+- `> md0.img.fixed` is the new fixed output file
+
+You can also chain this directly in the original SSH command:
+
+```shell
+local $ ssh nsroot@<NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
+```
+
 This method can also be used to acquire an image of the `/flash` and `/var` disk, which usually resides on `/dev/da0`:
 
 ```
-local $ ssh nsroot@<NETSCALER-IP> shell dd if=/dev/da0 bs=10M > da0.img
+local $ ssh nsroot@<NETSCALER-IP> shell dd if=/dev/da0 bs=10M | tail -c +7 | head -c -6 > da0.img
 ```
