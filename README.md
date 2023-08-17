@@ -40,7 +40,7 @@ A Citrix NetScaler exposes two important block devices which can imaged for offl
 * `/dev/md0`: The disk that holds the root (`/`) directory. This is a RAM disk
 * `/dev/da0`: The disk that holds the `/var` and `/flash` directories. This is a persistent disk.
 
-The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is a volatile disk. This disk can be found at `/dev/md0` when the NetScaler is powered-on and running, and will be unavailable when the NetScaler is powered-off. The `/var` and `/flash` directories reside on the `/dev/da0` disk and is persistent.
+The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is a volatile disk. This disk can be found at `/dev/md0` when the NetScaler is powered-on and running, and will be unavailable when the NetScaler is powered-off. The `/var` and `/flash` directories reside on the `/dev/da0` disk as two separate partitions and is persistent.
 
 The following commands can be used on a local linux machine to create disk of your NetScaler over SSH:
 
