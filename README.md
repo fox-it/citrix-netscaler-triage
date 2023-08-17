@@ -36,8 +36,7 @@ python3 iocitrix.py md0.img+da0.img
 
 ## Creating Citrix NetScaler disk images
 
-A Citrix NetScaler exposes two device files which can imaged for offline forensic analysis. These device files can be found at the following paths:
-
+A Citrix NetScaler exposes two important block devices which can imaged for offline forensic analysis. These block device files can be found at the following paths:
 * `/dev/md0`: The disk that holds the root (`/`) directory. This is a RAM disk
 * `/dev/da0`: The disk that holds the `/var` and `/flash` directories. This is a persistent disk.
 
