@@ -49,6 +49,10 @@ The following commands can be used on a local linux machine to create disk of yo
 ```shell 
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/da0 bs=10M | tail -c +7 | head -c -6 > da0.img
 ```
+
+Do note, that this can take some time to complete. No progess is shown when using `dd`. 
+It is adviced to wait until you gain control back over the prompt. This is an indication that `dd` finished.
+
 #### Create a disk image of the `/dev/md0` disk to your local machine
 ```shell
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
