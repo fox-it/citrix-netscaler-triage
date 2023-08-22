@@ -9,15 +9,27 @@ You can use `iocitrix.py` to check for known Indicators of Compromise on a NetSc
 * Suspicious cronjobs
 * Unknown SUID binaries
 
-Note that this script is meant to run on acquired disk images of Citrix NetScaler devices and not on the device itself.
-Also see the "Acquiring Citrix NetScaler RAM disk" section about how to create a disk image of the Citrix NetScaler RAM disk.
+Note that this script is meant to run on forensic disk images of Citrix NetScaler devices and not on the device itself.
+Also see the [Creating Citrix NetScaler disk images](#creating-citrix-netscaler-disk-images) section on how to create forensic disk images of your Citrix NetScaler.
 
 Ensure that you have the latest version of Dissect, support for Citrix NetScaler was added in this PR: https://github.com/fox-it/dissect.target/pull/357
 
-**Disclaimer**: While this tool strives for accuracy, it is possible for it to produce false posives or false negatives. Users are advised to cross-check results and use their own judgement before making any decisions based on this tool's output.
+**Disclaimer**: While this tool strives for accuracy, it is possible for it to produce false positives or false negatives. Users are advised to cross-check results and use their own judgement before making any decisions based on this tool's output.
 
 ## Installing `iocitrix.py`
-First run `pip install -r requirements.txt` within the `citrix-netscaler-triage` folder to install dependencies. 
+
+Use the following steps:
+
+1. git clone https://github.com/fox-it/citrix-netscaler-triage.git
+2. cd citrix-netscaler-triage
+3. pip install -r requirements.txt
+4. pip install --upgrade --pre dissect.volume dissect.target
+ 
+Note that step 4 will print the following error, but you can ignore it:
+
+```
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+```
 
 You can then run `iocitrix.py <TARGETS>` to start an IOC check against one or more forensic images. The script accepts any input that [dissect](https://github.com/fox-it/dissect.target) can read as a `Target`, such as a `.VMDK`, or a raw disk image. Some examples are provided below.
 
@@ -26,13 +38,15 @@ python3 iocitrix.py image.vmx
 python3 iocitrix.py image.vmdk
 ```
 
-If you have also created a [RAM disk](#create-a-disk-image-of-the-devmd0-disk-to-your-local-machine) image, you can utilize `iocitrix.py` to incorporate volatile data in its triage as such:
+If you have also created a forensic image of the [RAM disk](#create-a-disk-image-of-the-devmd0-disk-to-your-local-machine), you can utilize `iocitrix.py` to incorporate volatile data in its triage as such:
 
 ```shell
 python3 iocitrix.py md0.img+image.vmx
 python3 iocitrix.py md0.img+image.vmdk
 python3 iocitrix.py md0.img+da0.img
 ```
+
+The `+` (plus) sign will load the two disk images as a single Dissect Target.
 
 ## Creating Citrix NetScaler disk images
 
@@ -45,12 +59,15 @@ The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is
 The following commands can be used on a local linux machine to create disk of your NetScaler over SSH:
 
 #### Create a disk image of the `/dev/da0` disk to your local machine
+
 ```shell 
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/da0 bs=10M | tail -c +7 | head -c -6 > da0.img
 ```
 
 Do note, that this can take some time to complete. No progess is shown when using `dd`. 
 It is adviced to wait until you gain control back over the prompt. This is an indication that `dd` finished.
+
+Also if you don't have `/dev/da0` it's most likely `/dev/ada0`, you can verify using the `mount` or `gpart show` command.
 
 #### Create a disk image of the `/dev/md0` disk to your local machine
 ```shell
