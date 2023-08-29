@@ -7,7 +7,7 @@
 # author: Fox-IT Security Research Team <srt@fox-it.com>
 #
 import argparse
-import os
+import posixpath
 import re
 from typing import Iterator
 
@@ -111,7 +111,7 @@ def check_suspicious_php_files(target: Target, start_path) -> Iterator[FindingRe
         return
     for directory, _, files in target.fs.walk(start_path):
         for file in files:
-            path = os.path.join(directory, file)
+            path = posixpath.join(directory, file)
             if not file.endswith(".php"):
                 continue
             if (target.fs.stat(path).st_mode & 0o777) != EXPECTED_PHP_FILE_PERMISSION:
