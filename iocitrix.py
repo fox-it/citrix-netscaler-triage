@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 #
 # file:   iocitrix.py
-#  
+#
 #  $ python3 iocitrix.py netscaler-image.vmx
 #
 # author: Fox-IT Security Research Team <srt@fox-it.com>
 #
 import argparse
-import os
 import re
 from typing import Iterator
 
@@ -26,7 +25,7 @@ except ImportError:
 
 EXPECTED_PHP_FILE_PERMISSION = 0o444
 
-SUSPICIOUS_PHP_CONTENTS = {b"eval($_", b"base64_decode(", b"http_status_code(", b"http_status_code(", b"array_filter("}
+SUSPICIOUS_PHP_CONTENTS = {"eval($_", "base64_decode(", "http_status_code(", "http_status_code(", "array_filter("}
 
 MAXIMUM_BYTE_SIZE_PHP_TO_CHECK_CONTENTS = 2048
 
@@ -109,34 +108,31 @@ FindingRecord = RecordDescriptor(
 def check_suspicious_php_files(target: Target, start_path) -> Iterator[FindingRecord]:
     if not target.fs.exists(start_path):
         return
-    for directory, _, files in target.fs.walk(start_path):
-        for file in files:
-            path = os.path.join(directory, file)
-            if not file.endswith(".php"):
-                continue
-            if (target.fs.stat(path).st_mode & 0o777) != EXPECTED_PHP_FILE_PERMISSION:
-                permission_printable = oct(target.fs.stat(path).st_mode & 0o777)
-                yield FindingRecord(
-                    alert=f"Suspicious php permission {permission_printable}",
-                    confidence="high",
-                    path=path,
-                    type="php-file-permission",
-                )
+    for path in target.fs.path(start_path).rglob("*.php"):
+        stat = path.stat()
+        mode = stat.st_mode & 0o777
+        if mode != EXPECTED_PHP_FILE_PERMISSION:
+            permission_printable = oct(mode)
+            yield FindingRecord(
+                alert=f"Suspicious php permission {permission_printable}",
+                confidence="high",
+                path=path,
+                type="php-file-permission",
+            )
 
-            if target.fs.stat(path).st_size > MAXIMUM_BYTE_SIZE_PHP_TO_CHECK_CONTENTS:
-                continue
+        if stat.st_size > MAXIMUM_BYTE_SIZE_PHP_TO_CHECK_CONTENTS:
+            continue
 
-            with target.fs.open(path) as php_file:
-                php_contents = php_file.readlines()
-                for line in php_contents:
-                    for evil in SUSPICIOUS_PHP_CONTENTS:
-                        if evil.lower() in line.lower():
-                            yield FindingRecord(
-                                type="php-file-contents",
-                                path=path,
-                                confidence="high",
-                                alert=f"Suspicious PHP code '{evil}'",
-                            )
+        with path.open("rt") as php_file:
+            for line in php_file:
+                for evil in SUSPICIOUS_PHP_CONTENTS:
+                    if evil.lower() in line.lower():
+                        yield FindingRecord(
+                            type="php-file-contents",
+                            path=path,
+                            confidence="high",
+                            alert=f"Suspicious PHP code '{evil}'",
+                        )
 
 
 def check_suid_binaries(target: Target) -> Iterator[tuple[str, str]]:
