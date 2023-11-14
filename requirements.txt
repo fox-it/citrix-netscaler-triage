@@ -1,2 +1,2 @@
 tabulate
-dissect>=3.8.1
+dissect==3.9
