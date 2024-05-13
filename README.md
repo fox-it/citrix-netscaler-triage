@@ -1,6 +1,47 @@
 # Citrix NetScaler Triage
 
-This repository contains a Dissect triage script for Citrix NetScaler devices.
+This repository contains triage scripts for Citrix NetScaler devices:
+
+* `iocitrix.py` -- a Dissect script to Triage a Citrix NetScaler image/target.
+* `scan-citrix-netscaler-version.py` -- fingerprint the version of a Citrix NetScaler device over HTTP
+
+# scan-citrix-netscaler-version.py
+
+You can use this script to scan and determine the version a Citrix NetScaler device over HTTP.
+
+## Installing `scan-citrix-netscaler-version.py`
+
+Use the following steps:
+
+1. git clone https://github.com/fox-it/citrix-netscaler-triage.git
+2. cd citrix-netscaler-triage
+3. pip install httpx
+4. python3 scan-citrix-netscaler-version.py --help
+
+Example usage:
+
+```shell
+$ python3 scan-citrix-netscaler-version.py 192.168.1.10
+192.168.1.10 is running Citrix NetScaler version 13.1-51.15
+```
+
+Or get the results in JSON:
+
+```shell
+$ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --json | jq
+{
+  "scanned_at": "2024-05-13T13:37:08.039109+00:00",
+  "target": "https://192.168.1.11",
+  "rdx_en_stamp": 1702548756,
+  "rdx_en_dt": "2023-12-14T10:12:36+00:00",
+  "version": "13.0-92.21",
+  "error": null
+}
+```
+
+For more options see `--help`.
+
+# iocitrix.py
 
 You can use `iocitrix.py` to check for known Indicators of Compromise on a NetScaler Dissect target. It checks for the following things:
 
