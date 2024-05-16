@@ -3,11 +3,11 @@
 This repository contains triage scripts for Citrix NetScaler devices:
 
 * `iocitrix.py` -- a Dissect script to Triage a Citrix NetScaler image/target.
-* `scan-citrix-netscaler-version.py` -- fingerprint the version of a Citrix NetScaler device over HTTP
+* `scan-citrix-netscaler-version.py` -- fingerprint the version of a Citrix NetScaler device over HTTP.
 
 # scan-citrix-netscaler-version.py
 
-You can use this script to scan and determine the version a Citrix NetScaler device over HTTP.
+You can use this script to scan and determine the version of a Citrix NetScaler device over HTTP.
 
 ## Installing `scan-citrix-netscaler-version.py`
 

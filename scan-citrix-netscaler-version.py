@@ -174,7 +174,7 @@ rdx_en_date,rdx_en_stamp,vhash,version
 """
 
 
-def load_version_hashes() -> tuple[dict, dict]:
+def load_version_hashes() -> tuple[dict[str, str], dict[int, str]]:
     """Return a tuple of two dictionaries: vhash_to_version, vstamp_to_version.
 
     Returns:
