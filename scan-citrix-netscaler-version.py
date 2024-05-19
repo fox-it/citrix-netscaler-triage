@@ -171,6 +171,7 @@ rdx_en_date,rdx_en_stamp,vhash,version
 2024-02-29 17:31:08+00:00,1709227868,,13.1-52.19
 2024-04-18 21:13:30+00:00,1713474810,,14.1-21.57
 2024-05-01 05:48:44+00:00,1714542524,fe1071e2b14a5b5016d3eb57ddcfc86d,12.1-55.304
+2024-05-13 16:45:28+00:00,1715618728,,13.1-53.17
 """
 
 
@@ -270,7 +271,7 @@ def main() -> None:
         help="enable TLS certificate verification",
     )
     parser.add_argument(
-        "--json", "-j", action="store_true", default=False, help="output JSON"
+        "--json", "-j", action="store_true", default=False, help="output scan results as JSON"
     )
     args = parser.parse_args()
 
