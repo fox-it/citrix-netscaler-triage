@@ -331,7 +331,7 @@ def main() -> None:
             print(f"{target}: {version.error}")
         elif version.version == "unknown":
             print(
-                f"{target} is running an unknown version (stamp={version.stamp}, dt={version.dt})"
+                f"{target} is running an unknown version (stamp={version.rdx_en_stamp}, dt={version.rdx_en_dt})"
             )
         else:
             print(f"{target} is running Citrix NetScaler version {version.version}")
