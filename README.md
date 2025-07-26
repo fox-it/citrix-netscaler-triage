@@ -11,12 +11,16 @@ You can use this script to scan and determine the version of a Citrix NetScaler 
 
 ## Installing `scan-citrix-netscaler-version.py`
 
-Use the following steps:
+Use the following steps if you are using pip:
 
 1. git clone https://github.com/fox-it/citrix-netscaler-triage.git
 2. cd citrix-netscaler-triage
 3. pip install httpx
 4. python3 scan-citrix-netscaler-version.py --help
+
+In case of `uv`, you can run the script directly using:
+
+1. uv run https://raw.githubusercontent.com/fox-it/citrix-netscaler-triage/refs/heads/main/scan-citrix-netscaler-version.py
 
 Example usage:
 
