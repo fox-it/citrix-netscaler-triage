@@ -3,6 +3,13 @@
 # file:     scan-citrix-netscaler-version.py
 # author:   Fox-IT Security Research Team <srt@fox-it.com>
 #
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "httpx",
+# ]
+# ///
+#
 # This script scans a remote Citrix NetScaler device to determine the version based on a GZIP timestamp in a resource file.
 # The version hash is not always present anymore since our blog, so we need to rely on this timestamp metadata.
 #
@@ -177,15 +184,22 @@ rdx_en_date,rdx_en_stamp,vhash,version
 2024-07-04 10:41:15+00:00,1720089675,,13.0-92.31
 2024-07-04 14:32:40+00:00,1720103560,,13.1-53.24
 2024-07-04 16:31:28+00:00,1720110688,,14.1-25.56
+2024-10-07 20:55:33+00:00,1728334533,a7c411815373059b33b4d83bed6145a2,12.1-55.321
 2024-10-11 10:23:04+00:00,1728642184,,14.1-29.72
 2024-10-22 01:37:14+00:00,1729561034,,14.1-34.42
 2024-10-24 13:43:49+00:00,1729777429,,13.1-55.34
 2024-11-07 16:17:10+00:00,1730996230,,13.1-56.18
+2024-11-29 10:21:03+00:00,1732875663,,13.1-37.219
 2024-12-16 17:20:08+00:00,1734369608,,14.1-38.53
 2025-01-25 10:12:49+00:00,1737799969,,13.1-57.26
+2025-02-11 01:19:25+00:00,1739236765,c624dcce8d3355d555021d2aac5f9715,12.1-55.325
+2025-02-21 16:41:24+00:00,1740156084,,14.1-43.50
+2025-04-01 08:43:29+00:00,1743497009,,13.1-37.232
+2025-04-08 14:08:19+00:00,1744121299,,13.1-58.21
 2025-06-07 13:53:15+00:00,1749304395,,14.1-47.46
 2025-06-10 10:53:47+00:00,1749552827,,14.1-43.56
 2025-06-10 14:02:25+00:00,1749564145,89929af92ff35a042d78e9010b7ec534,12.1-55.328
+2025-06-10 16:26:42+00:00,1749572802,,13.1-37.235
 2025-06-10 20:52:27+00:00,1749588747,,13.1-58.32
 2025-06-18 13:04:11+00:00,1750251851,,13.1-59.19
 """
@@ -217,9 +231,16 @@ def load_version_hashes() -> tuple[dict[str, str], dict[int, str]]:
 
 vhash_to_version, vstamp_to_version = load_version_hashes()
 
+# Enable legacy TLS support for old NetScaler devices
+ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+ssl_ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+
 
 class NetScalerVersion(NamedTuple):
     target: str
+    tls_names: str
     rdx_en_stamp: int | None
     rdx_en_dt: datetime | None
     version: str | None
@@ -237,8 +258,22 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
     version = None
     error = None
     with client.stream("GET", url) as response:
+        network_stream = response.extensions["network_stream"]
+        ssl_object = network_stream.get_extra_info("ssl_object")
+
+        # Temporarily enable certificate verification to extract some information that is not available otherwise
+        old_mode = ssl_ctx.verify_mode
+        ssl_ctx.verify_mode = ssl.CERT_OPTIONAL
+        try:
+            subject_alt_names = None
+            cert = ssl_object.getpeercert()
+            if cert and "subjectAltName" in cert:
+                subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
+        finally:
+            ssl_ctx.verify_mode = old_mode
+
         stream = response.iter_raw(100)
-        data = next(stream)
+        data = next(stream, b"")
         if data.startswith(b"\x1f\x8b\x08\x08") and b"rdx_en.json" in data:
             stamp = int.from_bytes(data[4:8], "little")
             dt = datetime.fromtimestamp(stamp, timezone.utc)
@@ -249,7 +284,14 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
         else:
             error = "No valid data found, probably not a Citrix NetScaler"
             logging.info("No valid data found, probably not a Citrix NetScaler")
-    return NetScalerVersion(target, stamp, dt, version, error)
+    return NetScalerVersion(
+        target=target,
+        tls_names=subject_alt_names,
+        rdx_en_stamp=stamp,
+        rdx_en_dt=dt,
+        version=version,
+        error=error,
+    )
 
 
 def main() -> None:
@@ -281,13 +323,11 @@ def main() -> None:
         "-v", "--verbose", action="count", default=0, help="increase verbosity"
     )
     parser.add_argument(
-        "--verify",
+        "--json",
+        "-j",
         action="store_true",
         default=False,
-        help="enable TLS certificate verification",
-    )
-    parser.add_argument(
-        "--json", "-j", action="store_true", default=False, help="output scan results as JSON"
+        help="output scan results as JSON",
     )
     args = parser.parse_args()
 
@@ -301,13 +341,7 @@ def main() -> None:
         datefmt="%Y-%m-%d %H:%M:%S%z",
     )
 
-    # Enable legacy TLS support for old NetScaler devices
-    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
-    ctx.check_hostname = args.verify
-    ctx.verify_mode = ssl.CERT_REQUIRED if args.verify else ssl.CERT_NONE
-
-    client = httpx.Client(verify=args.verify, timeout=args.timeout)
+    client = httpx.Client(verify=ssl_ctx, timeout=args.timeout)
     targets = args.input or args.targets
 
     for target in targets:
@@ -331,10 +365,12 @@ def main() -> None:
             print(f"{target}: {version.error}")
         elif version.version == "unknown":
             print(
-                f"{target} is running an unknown version (stamp={version.rdx_en_stamp}, dt={version.rdx_en_dt})"
+                f"{target} ({version.tls_names}) is running an unknown version (stamp={version.rdx_en_stamp}, dt={version.rdx_en_dt})"
             )
         else:
-            print(f"{target} is running Citrix NetScaler version {version.version}")
+            print(
+                f"{target} ({version.tls_names}) is running Citrix NetScaler version {version.version}"
+            )
 
 
 if __name__ == "__main__":
