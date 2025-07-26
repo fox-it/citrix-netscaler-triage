@@ -237,6 +237,7 @@ ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
 ssl_ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
+ssl_ctx.set_ciphers("ALL:@SECLEVEL=0")
 
 
 class NetScalerVersion(NamedTuple):
