@@ -26,6 +26,7 @@ import csv
 import json
 import logging
 import ssl
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import NamedTuple
 
@@ -247,6 +248,14 @@ class NetScalerVersion(NamedTuple):
     error: str | None = None
 
 
+@contextmanager
+def temporary_ssl_verify_mode(ssl_ctx: ssl.SSLContext, new_mode: ssl.VerifyMode):
+    old_mode = ssl_ctx.verify_mode
+    ssl_ctx.verify_mode = new_mode
+    yield
+    ssl_ctx.verify_mode = old_mode
+
+
 def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersion:
     url = target
     if not target.startswith(("http://", "https://")):
@@ -257,20 +266,16 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
     dt = None
     version = None
     error = None
+    subject_alt_names = None
     with client.stream("GET", url) as response:
         network_stream = response.extensions["network_stream"]
         ssl_object = network_stream.get_extra_info("ssl_object")
 
         # Temporarily enable certificate verification to extract some information that is not available otherwise
-        old_mode = ssl_ctx.verify_mode
-        ssl_ctx.verify_mode = ssl.CERT_OPTIONAL
-        try:
-            subject_alt_names = None
+        with temporary_ssl_verify_mode(ssl_ctx, ssl.CERT_OPTIONAL):
             cert = ssl_object.getpeercert()
             if cert and "subjectAltName" in cert:
                 subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
-        finally:
-            ssl_ctx.verify_mode = old_mode
 
         stream = response.iter_raw(100)
         data = next(stream, b"")
