@@ -325,9 +325,13 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
 
         # Temporarily enable certificate verification to extract some information that is not available otherwise
         with temporary_ssl_verify_mode(ssl_ctx, ssl.CERT_OPTIONAL):
-            cert = ssl_object.getpeercert()
-            if cert and "subjectAltName" in cert:
-                subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
+            try:
+                cert = ssl_object.getpeercert()
+            except AttributeError:
+                pass
+            else:
+                if cert and "subjectAltName" in cert:
+                    subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
 
         stream = response.iter_raw(100)
         data = next(stream, b"")
@@ -340,7 +344,7 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
             )
         else:
             error = "No valid data found, probably not a Citrix NetScaler"
-            logging.info("No valid data found, probably not a Citrix NetScaler")
+            raise ValueError(error)
     return NetScalerVersion(
         target=target,
         tls_names=subject_alt_names,
@@ -405,9 +409,9 @@ def main() -> None:
         target = target.strip()
         try:
             version = scan_netscaler_version(target, client)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, ValueError) as e:
             logging.warning(f"Failed to scan {target}: {e}")
-            version = NetScalerVersion(target, None, None, None, str(e))
+            continue
 
         if args.json:
             jdict = {"scanned_at": datetime.now(timezone.utc).isoformat()}
