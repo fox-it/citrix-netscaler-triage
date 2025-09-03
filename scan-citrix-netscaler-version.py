@@ -344,7 +344,7 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
             )
         else:
             error = "No valid data found, probably not a Citrix NetScaler"
-            logging.info("No valid data found, probably not a Citrix NetScaler")
+
     return NetScalerVersion(
         target=target,
         tls_names=subject_alt_names,
@@ -398,7 +398,7 @@ def main() -> None:
     levels = [logging.WARNING, logging.INFO, logging.DEBUG]
     logging.basicConfig(
         level=levels[min(args.verbose, 2)],
-        format="%(asctime)s - %(message)s",
+        format="%(asctime)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S%z",
     )
 
@@ -409,9 +409,17 @@ def main() -> None:
         target = target.strip()
         try:
             version = scan_netscaler_version(target, client)
-        except httpx.HTTPError as e:
-            logging.warning(f"Failed to scan {target}: {e}")
-            version = NetScalerVersion(target, None, None, None, str(e))
+        except Exception as exc:
+            if args.verbose >= 2:
+                logging.exception(f"Exception while scanning {target}")
+            version = NetScalerVersion(
+                target=target,
+                tls_names=None,
+                rdx_en_stamp=None,
+                rdx_en_dt=None,
+                version=None,
+                error=str(exc),
+            )
 
         if args.json:
             jdict = {"scanned_at": datetime.now(timezone.utc).isoformat()}
@@ -423,7 +431,7 @@ def main() -> None:
             continue
 
         if version.error:
-            print(f"{target}: {version.error}")
+            print(f"{target}: ERROR: {version.error}")
         elif version.version == "unknown":
             print(
                 f"{target} ({version.tls_names}) is running an unknown version (stamp={version.rdx_en_stamp}, dt={version.rdx_en_dt})"
