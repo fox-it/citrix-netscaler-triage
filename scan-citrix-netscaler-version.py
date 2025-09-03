@@ -758,7 +758,6 @@ def main() -> None:
             )
             jdict.update(version._asdict())
             jdict.update({"vulnerable": vulnerable_map})
-            is_vulnerable = any(vulnerable_map.values()) if vulnerable_map else False
             jdict.update({"is_vulnerable": is_vulnerable})
 
             if args.csv:
