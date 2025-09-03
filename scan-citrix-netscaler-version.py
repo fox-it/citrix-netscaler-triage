@@ -23,14 +23,21 @@ from __future__ import annotations
 
 import argparse
 import csv
+import doctest
 import json
 import logging
+import os
 import ssl
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import NamedTuple
 
 import httpx
+
+# ============================================================================
+# NetScaler version fingerprints
+# ============================================================================
 
 # Original Citrix NetScaler version CSV file (updated in this Python script):
 #  - https://gist.github.com/fox-srt/c7eb3cbc6b4bf9bb5a874fa208277e86
@@ -285,15 +292,288 @@ def load_version_hashes() -> tuple[dict[str, str], dict[int, str]]:
 
 vhash_to_version, vstamp_to_version = load_version_hashes()
 
-# Enable legacy TLS support for old NetScaler devices
-ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
-ssl_ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
-ssl_ctx.check_hostname = False
-ssl_ctx.verify_mode = ssl.CERT_NONE
-ssl_ctx.set_ciphers("ALL:@SECLEVEL=0")
+
+# ============================================================================
+# Color functions
+# ============================================================================
+
+KBOLD = "\033[1m"
+KRED = "\x1b[31m"
+KCYAN = "\x1b[36m"
+KGREEN = "\x1b[32m"
+KYELLOW = "\x1b[33m"
+KNORM = "\033[0m"
 
 
-class NetScalerVersion(NamedTuple):
+def bold(text):
+    return KBOLD + text + KNORM
+
+
+def cyan(text):
+    return KCYAN + text + KNORM
+
+
+def green(text):
+    return KGREEN + text + KNORM
+
+
+def red(text):
+    return KRED + text + KNORM
+
+
+def yellow(text):
+    return KYELLOW + text + KNORM
+
+
+def nocolor(text):
+    return text
+
+
+# ============================================================================
+# Helper functions
+# ============================================================================
+
+
+@contextmanager
+def temporary_ssl_verify_mode(ssl_ctx: ssl.SSLContext, new_mode: ssl.VerifyMode):
+    """Temporarily change the SSL verification mode."""
+    old_mode = ssl_ctx.verify_mode
+    ssl_ctx.verify_mode = new_mode
+    yield
+    ssl_ctx.verify_mode = old_mode
+
+
+# ============================================================================
+# Vulnerability check functions
+# ============================================================================
+class VersionTuple(NamedTuple):
+    major: int
+    minor: int
+    build: int
+    patch: int
+
+
+def parse_version(version: str) -> VersionTuple:
+    """Convert a version string to a VersionTuple.
+
+    Raises ValueError if the version string cannot be parsed.
+
+    Example:
+    >>> parse_version("12.1-55.328")
+    VersionTuple(major=12, minor=1, build=55, patch=328)
+    >>> parse_version("unknown")
+    Traceback (most recent call last):
+      ...
+    ValueError: Invalid version: unknown
+    """
+    if version and version != "unknown":
+        version = version.replace(".", "-")
+        major, minor, build, patch = map(int, version.split("-"))
+        return VersionTuple(major, minor, build, patch)
+    raise ValueError(f"Invalid version: {version}")
+
+
+def is_fips_13_1(vtuple: VersionTuple) -> bool:
+    """Return True if the version is FIPS 13.1.
+
+    >>> is_fips_13_1(parse_version("13.1-37-241"))
+    True
+    >>> is_fips_12_1(parse_version("13.1-9.60"))
+    False
+    """
+    return (vtuple.major, vtuple.minor, vtuple.build) == (13, 1, 37)  # fips, ndcpp
+
+
+def is_fips_12_1(vtuple: VersionTuple) -> bool:
+    """Return True if the version is FIPS 12.1.
+
+    >>> is_fips_12_1(parse_version("12.1-55-12345"))
+    True
+    >>> is_fips_12_1(parse_version("12.1-62.27"))
+    False
+    """
+    return (vtuple.major, vtuple.minor, vtuple.build) == (12, 1, 55)  # fips, ndcpp
+
+
+def is_eol(vtuple: VersionTuple) -> bool:
+    """Return True if the version is considered End Of Life (EOL).
+
+    NetScaler ADC and NetScaler Gateway versions 12.1 and 13.0 are now End Of Life (EOL)
+
+    >>> is_eol(parse_version("12.1-55.328"))    # fips is not EOL
+    False
+    >>> is_eol(parse_version("13.1-37.241"))    # fips is not EOL
+    False
+    >>> is_eol(parse_version("13.0-0.0"))
+    True
+    >>> is_eol(parse_version("13.1-37.241"))
+    False
+    >>> is_eol(parse_version("11.1-65.20"))
+    True
+    >>> is_eol(parse_version("12.1-50.28"))
+    True
+    """
+    if is_fips_13_1(vtuple) or is_fips_12_1(vtuple):
+        return False
+    elif vtuple.major == 13 and vtuple.minor == 0:
+        return True
+    elif vtuple.major <= 12:
+        return True
+    return False
+
+
+def is_vuln_ctx693420(vtuple: VersionTuple) -> bool:
+    """Check if the version is vulnerable to CVE-2025-5349 or CVE-2025-5777 (citrixbleed 2).
+
+    Affected versions:
+    - NetScaler ADC and NetScaler Gateway 14.1 BEFORE 14.1-43.56
+    - NetScaler ADC and NetScaler Gateway 13.1 BEFORE 13.1-58.32
+    - NetScaler ADC 13.1-FIPS and NDcPP BEFORE 13.1-37.235-FIPS and NDcPP
+    - NetScaler ADC 12.1-FIPS BEFORE 12.1-55.328-FIPS
+
+    NetScaler ADC and NetScaler Gateway versions 12.1 and 13.0 are now End Of Life (EOL) and are vulnerable.
+
+    References:
+    - https://support.citrix.com/support-home/kbsearch/article?articleNumber=CTX693420
+    - https://www.akamai.com/blog/security-research/mitigating-citrixbleed-memory-vulnerability-ase
+    - https://www.netscaler.com/blog/news/netscaler-critical-security-updates-for-cve-2025-6543-and-cve-2025-5777/
+    - https://docs.netscaler.com/en-us/netscaler-console-service/instance-advisory/upgrade-advisory.html
+
+    >>> is_vuln_ctx693420(parse_version("13.1-37-234"))
+    True
+    >>> is_vuln_ctx693420(parse_version("13.1-37-235"))
+    False
+    >>> is_vuln_ctx693420(parse_version("14.1-43.56"))
+    False
+    >>> is_vuln_ctx693420(parse_version("14.1-43.55"))
+    True
+    >>> is_vuln_ctx693420(parse_version("13.1-58.32"))
+    False
+    >>> is_vuln_ctx693420(parse_version("13.1-58.31"))
+    True
+    >>> is_vuln_ctx693420(parse_version("12.1-55.328"))
+    False
+    >>> is_vuln_ctx693420(parse_version("12.1-55.320"))
+    True
+    >>> is_vuln_ctx693420(parse_version("12.1-50.28"))
+    True
+    """
+
+    if is_fips_13_1(vtuple):
+        return vtuple < VersionTuple(13, 1, 37, 235)
+    elif is_fips_12_1(vtuple):
+        return vtuple < VersionTuple(12, 1, 55, 328)
+    elif vtuple.major == 14:
+        return vtuple < VersionTuple(14, 1, 43, 56)
+    elif vtuple.major == 13:
+        return vtuple < VersionTuple(13, 1, 58, 32)
+    return is_eol(vtuple)
+
+
+def is_vuln_ctx694788(vtuple: VersionTuple) -> bool:
+    """Check if the version is vulnerable to CVE-2025-6543 (memory overflow exploited ITW)
+
+    Affected versions:
+    - NetScaler ADC and NetScaler Gateway 14.1 BEFORE 14.1-47.46
+    - NetScaler ADC and NetScaler Gateway 13.1 BEFORE 13.1-59.19
+    - NetScaler ADC 13.1-FIPS and NDcPP  BEFORE 13.1-37.236-FIPS and NDcPP
+
+    NetScaler ADC 12.1-FIPS is not affected by this vulnerability.
+    NetScaler ADC and NetScaler Gateway versions 12.1 and 13.0 are now End Of Life (EOL) and are vulnerable.
+
+    References:
+    - https://support.citrix.com/support-home/kbsearch/article?articleNumber=CTX694788
+    - https://support.citrix.com/external/article/694788/netscaler-adc-and-netscaler-gateway-secu.html
+    - https://www.ncsc.nl/actueel/nieuws/2025/07/21/informatie-over-kwetsbaarheden-in-citrix-netscaler-adc-en-netscaler-gateway
+
+    >>> is_vuln_ctx694788(parse_version("14.1-47.46"))
+    False
+    >>> is_vuln_ctx694788(parse_version("14.1-47.45"))
+    True
+    >>> is_vuln_ctx694788(parse_version("13.1-59.19"))
+    False
+    >>> is_vuln_ctx694788(parse_version("13.1-59.18"))
+    True
+    >>> is_vuln_ctx694788(parse_version("13.1-37.236")) # fips
+    False
+    >>> is_vuln_ctx694788(parse_version("13.1-37.235")) # fips
+    True
+    >>> is_vuln_ctx694788(parse_version("12.1-55.132")) # fips 12.1 not affected
+    False
+    >>> is_vuln_ctx694788(parse_version("12.1-55.328")) # fips 12.1 not affected
+    False
+    >>> is_vuln_ctx694788(parse_version("12.1-55.327")) # fips 12.1 not affected
+    False
+    """
+    if is_fips_13_1(vtuple):
+        return vtuple < VersionTuple(13, 1, 37, 236)
+    elif is_fips_12_1(vtuple):
+        return False
+    elif vtuple.major == 14:
+        return vtuple < VersionTuple(14, 1, 47, 46)
+    elif vtuple.major == 13:
+        return vtuple < VersionTuple(13, 1, 59, 19)
+    return is_eol(vtuple)
+
+
+def is_vuln_ctx694938(vtuple: VersionTuple) -> bool:
+    """Check if the version is vulnerable to CVE-2025-7775, CVE-2025-7776 and CVE-2025-8424
+
+    Affected versions:
+    - NetScaler ADC and NetScaler Gateway 14.1 BEFORE 14.1-47.48
+    - NetScaler ADC and NetScaler Gateway 13.1 BEFORE 13.1-59.22
+    - NetScaler ADC 13.1-FIPS and NDcPP BEFORE 13.1-37.241-FIPS and NDcPP
+    - NetScaler ADC 12.1-FIPS and NDcPP BEFORE 12.1-55.330-FIPS and NDcPP
+
+    References:
+    - https://support.citrix.com/support-home/kbsearch/article?articleNumber=CTX694938
+
+    >>> is_vuln_ctx694938(parse_version("14.1-47.48"))
+    False
+    >>> is_vuln_ctx694938(parse_version("14.1-47.47"))
+    True
+    >>> is_vuln_ctx694938(parse_version("13.1-59.22"))
+    False
+    >>> is_vuln_ctx694938(parse_version("13.1-59.21"))
+    True
+    >>> is_vuln_ctx694938(parse_version("13.1-37.241")) # fips
+    False
+    >>> is_vuln_ctx694938(parse_version("13.1-37.240")) # fips
+    True
+    >>> is_vuln_ctx694938(parse_version("12.1-55.330")) # fips
+    False
+    >>> is_vuln_ctx694938(parse_version("12.1-55.329")) # fips
+    True
+    """
+    if is_fips_13_1(vtuple):
+        return vtuple < VersionTuple(13, 1, 37, 241)
+    elif is_fips_12_1(vtuple):
+        return vtuple < VersionTuple(12, 1, 55, 330)
+    elif vtuple.major == 14:
+        return vtuple < VersionTuple(14, 1, 47, 48)
+    elif vtuple.major == 13:
+        return vtuple < VersionTuple(13, 1, 59, 22)
+    return is_eol(vtuple)
+
+
+CVE_CHECKS = {
+    # added 2025-06-17
+    "CVE-2025-5349": is_vuln_ctx693420,
+    "CVE-2025-5777": is_vuln_ctx693420,
+    # added 2025-06-25
+    "CVE-2025-6543": is_vuln_ctx694788,
+    # added 2025-08-26
+    "CVE-2025-7775": is_vuln_ctx694938,
+    "CVE-2025-7776": is_vuln_ctx694938,
+    "CVE-2025-8424": is_vuln_ctx694938,
+}
+
+# ============================================================================
+# Main scanning logic
+# ============================================================================
+
+
+class NetScalerScanResult(NamedTuple):
     target: str
     tls_names: str
     rdx_en_stamp: int | None
@@ -302,15 +582,15 @@ class NetScalerVersion(NamedTuple):
     error: str | None = None
 
 
-@contextmanager
-def temporary_ssl_verify_mode(ssl_ctx: ssl.SSLContext, new_mode: ssl.VerifyMode):
-    old_mode = ssl_ctx.verify_mode
-    ssl_ctx.verify_mode = new_mode
-    yield
-    ssl_ctx.verify_mode = old_mode
+# Enable legacy TLS support for old NetScaler devices
+ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+ssl_ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
+ssl_ctx.check_hostname = False
+ssl_ctx.verify_mode = ssl.CERT_NONE
+ssl_ctx.set_ciphers("ALL:@SECLEVEL=0")
 
 
-def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersion:
+def scan_netscaler_target(target: str, client: httpx.Client) -> NetScalerScanResult:
     url = target
     if not target.startswith(("http://", "https://")):
         url = f"https://{target}"
@@ -347,7 +627,7 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
         else:
             error = "No valid data found, probably not a Citrix NetScaler"
 
-    return NetScalerVersion(
+    return NetScalerScanResult(
         target=target,
         tls_names=subject_alt_names,
         rdx_en_stamp=stamp,
@@ -359,8 +639,10 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Scan Citrix NetScaler to determine version"
+        description="Scan Citrix NetScaler to determine version and vulnerabilities",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+
     parser.add_argument(
         "targets",
         metavar="TARGET",
@@ -392,6 +674,18 @@ def main() -> None:
         default=False,
         help="output scan results as JSON",
     )
+    parser.add_argument(
+        "--csv",
+        "-C",
+        action="store_true",
+        default=False,
+        help="output scan results as CSV",
+    )
+    parser.add_argument(
+        "--cve",
+        "-c",
+        help="limit CVEs to check instead of all, e.g. CVE-2025-6543,CVE-2025-7775",
+    )
     args = parser.parse_args()
 
     if not args.targets and not args.input:
@@ -404,17 +698,33 @@ def main() -> None:
         datefmt="%Y-%m-%d %H:%M:%S%z",
     )
 
+    # Respect NO_COLOR
+    if os.getenv("NO_COLOR"):
+        global bold, cyan, green, red, yellow
+        bold = cyan = green = red = yellow = nocolor
+
+    available_cves = list(CVE_CHECKS.keys())
+    cves_to_check = (
+        [cve.strip() for cve in args.cve.split(",")] if args.cve else available_cves
+    )
+    for cve in cves_to_check:
+        if cve not in available_cves:
+            parser.error(
+                f"Unknown CVE: {cve!r}, available CVEs are:\n - {"\n - ".join(available_cves)}"
+            )
+
     client = httpx.Client(verify=ssl_ctx, timeout=args.timeout)
     targets = args.input or args.targets
+    csv_writer = None
 
     for target in targets:
         target = target.strip()
         try:
-            version = scan_netscaler_version(target, client)
+            version = scan_netscaler_target(target, client)
         except Exception as exc:
             if args.verbose >= 2:
                 logging.exception(f"Exception while scanning {target}")
-            version = NetScalerVersion(
+            version = NetScalerScanResult(
                 target=target,
                 tls_names=None,
                 rdx_en_stamp=None,
@@ -423,26 +733,69 @@ def main() -> None:
                 error=str(exc),
             )
 
-        if args.json:
+        # Check version for vulnerabilities
+        vulnerable_map: dict[str, bool] = {}
+        try:
+            vtuple = parse_version(version.version)
+        except ValueError:
+            pass
+        else:
+            for cve in cves_to_check:
+                vuln_check = CVE_CHECKS[cve]
+                logging.info(f"Checking {cve} on {target}")
+                vulnerable_map[cve] = vuln_check(vtuple)
+                if vulnerable_map[cve]:
+                    logging.debug(f"VULNERABLE: {cve} on {target}")
+
+        # Determine if the target is vulnerable
+        is_vulnerable = any(vulnerable_map.values()) if vulnerable_map else False
+
+        # Output as JSON or CSV
+        if args.json or args.csv:
             jdict = {"scanned_at": datetime.now(timezone.utc).isoformat()}
             version = version._replace(
                 rdx_en_dt=version.rdx_en_dt.isoformat() if version.rdx_en_dt else None
             )
             jdict.update(version._asdict())
-            print(json.dumps(jdict))
+            jdict.update({"vulnerable": vulnerable_map})
+            is_vulnerable = any(vulnerable_map.values()) if vulnerable_map else False
+            jdict.update({"is_vulnerable": is_vulnerable})
+
+            if args.csv:
+                # convert vulnerable dict to columns
+                for cve, value in jdict["vulnerable"].items():
+                    jdict[f"vuln_{cve}"] = int(value)
+                jdict.pop("vulnerable", None)
+                # ensure is_vulnerable column is last for consistency
+                jdict["is_vulnerable"] = int(jdict.pop("is_vulnerable"))
+                if not csv_writer:
+                    csv_writer = csv.DictWriter(sys.stdout, fieldnames=jdict.keys())
+                    csv_writer.writeheader()
+                csv_writer.writerow(jdict)
+            elif args.json:
+                print(json.dumps(jdict))
             continue
 
+        # Plain text output
         if version.error:
-            print(f"{target}: ERROR: {version.error}")
+            print(f"{target} ({version.tls_names}): ERROR: {version.error}")
         elif version.version == "unknown":
             print(
                 f"{target} ({version.tls_names}) is running an unknown version (stamp={version.rdx_en_stamp}, dt={version.rdx_en_dt})"
             )
         else:
+            vulnerable_str = (
+                red("VULNERABLE") if is_vulnerable else green("NOT VULNERABLE")
+            )
             print(
-                f"{target} ({version.tls_names}) is running Citrix NetScaler version {version.version}"
+                f"{target} ({version.tls_names}) is running Citrix NetScaler version {version.version} ({vulnerable_str})"
             )
 
 
 if __name__ == "__main__":
+    # Run self-test (doctests)
+    results = doctest.testmod()
+    if results.failed:
+        print(f"Self test failed: {results}")
+        raise SystemExit(1)
     main()
