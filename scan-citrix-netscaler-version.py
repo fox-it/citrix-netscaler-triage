@@ -325,9 +325,13 @@ def scan_netscaler_version(target: str, client: httpx.Client) -> NetScalerVersio
 
         # Temporarily enable certificate verification to extract some information that is not available otherwise
         with temporary_ssl_verify_mode(ssl_ctx, ssl.CERT_OPTIONAL):
-            cert = ssl_object.getpeercert()
-            if cert and "subjectAltName" in cert:
-                subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
+            try:
+                cert = ssl_object.getpeercert()
+            except AttributeError:
+                pass
+            else:
+                if cert and "subjectAltName" in cert:
+                    subject_alt_names = ", ".join(s[1] for s in cert["subjectAltName"])
 
         stream = response.iter_raw(100)
         data = next(stream, b"")
