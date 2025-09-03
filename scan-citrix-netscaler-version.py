@@ -378,7 +378,7 @@ def is_fips_13_1(vtuple: VersionTuple) -> bool:
 
     >>> is_fips_13_1(parse_version("13.1-37-241"))
     True
-    >>> is_fips_12_1(parse_version("13.1-9.60"))
+    >>> is_fips_13_1(parse_version("13.1-9.60"))
     False
     """
     return (vtuple.major, vtuple.minor, vtuple.build) == (13, 1, 37)  # fips, ndcpp
