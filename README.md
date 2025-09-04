@@ -3,11 +3,12 @@
 This repository contains triage scripts for Citrix NetScaler devices:
 
 * `iocitrix.py` -- a Dissect script to Triage a Citrix NetScaler image/target.
-* `scan-citrix-netscaler-version.py` -- fingerprint the version of a Citrix NetScaler device over HTTP.
+* `scan-citrix-netscaler-version.py` -- Scan and fingerprint the version of a Citrix NetScaler device over HTTP(s).
 
 # scan-citrix-netscaler-version.py
 
-You can use this script to scan and determine the version of a Citrix NetScaler device over HTTP.
+You can use this script to scan and determine the version of a Citrix NetScaler device over HTTP(s).
+It will also determine if the NetScaler is vulnerable to specific CVEs based on the version.
 
 ## Installing `scan-citrix-netscaler-version.py`
 
@@ -18,15 +19,16 @@ Use the following steps if you are using pip:
 3. pip install httpx
 4. python3 scan-citrix-netscaler-version.py --help
 
-In case of `uv`, you can run the script directly using:
+In case of [uv](https://docs.astral.sh/uv/), you can run the script directly using:
 
 1. uv run https://raw.githubusercontent.com/fox-it/citrix-netscaler-triage/refs/heads/main/scan-citrix-netscaler-version.py
 
 Example usage:
 
 ```shell
-$ python3 scan-citrix-netscaler-version.py 192.168.1.10
-192.168.1.10 is running Citrix NetScaler version 13.1-51.15
+$ python3 scan-citrix-netscaler-version.py 192.168.1.10 192.168.1.12
+192.168.1.10 (*.local.domain) is running Citrix NetScaler version 13.1-51.15 (VULNERABLE)
+192.168.1.12 (*.local.domain) is running Citrix NetScaler version 12.1-55.330 (NOT VULNERABLE)
 ```
 
 Or get the results in JSON:
@@ -34,15 +36,45 @@ Or get the results in JSON:
 ```shell
 $ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --json | jq
 {
-  "scanned_at": "2024-05-13T13:37:08.039109+00:00",
+  "scanned_at": "2025-09-03T23:11:36.864228+00:00",
   "target": "https://192.168.1.11",
-  "rdx_en_stamp": 1702548756,
-  "rdx_en_dt": "2023-12-14T10:12:36+00:00",
-  "version": "13.0-92.21",
-  "error": null
+  "tls_names": "my-first-netscaler.local",
+  "rdx_en_stamp": 1702886392,
+  "rdx_en_dt": "2023-12-18T07:59:52+00:00",
+  "version": "12.1-55.302",
+  "error": null,
+  "vulnerable": {
+    "CVE-2025-5349": true,
+    "CVE-2025-5777": true,
+    "CVE-2025-6543": false,
+    "CVE-2025-7775": true,
+    "CVE-2025-7776": true,
+    "CVE-2025-8424": true
+  },
+  "is_vulnerable": true
 }
 ```
 
+It's also possible to limit vulnerability status checks to specific CVEs by using the `--cve` flag:
+
+```shell
+$ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --cve CVE-2025-6543 --json | jq
+{
+  "scanned_at": "2025-09-03T23:16:36.573016+00:00",
+  "target": "https://192.168.1.11",
+  "tls_names": "my-first-netscaler.local",
+  "rdx_en_stamp": 1702886392,
+  "rdx_en_dt": "2023-12-18T07:59:52+00:00",
+  "version": "12.1-55.302",
+  "error": null,
+  "vulnerable": {
+    "CVE-2025-6543": false
+  },
+  "is_vulnerable": false
+}
+```
+
+To get the results in CSV format, just use the `--csv` flag.
 For more options see `--help`.
 
 # iocitrix.py
