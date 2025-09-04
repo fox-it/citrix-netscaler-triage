@@ -3,11 +3,12 @@
 This repository contains triage scripts for Citrix NetScaler devices:
 
 * `iocitrix.py` -- a Dissect script to Triage a Citrix NetScaler image/target.
-* `scan-citrix-netscaler-version.py` -- fingerprint the version of a Citrix NetScaler device over HTTP.
+* `scan-citrix-netscaler-version.py` -- Scan and fingerprint the version of a Citrix NetScaler device over HTTP(s).
 
 # scan-citrix-netscaler-version.py
 
-You can use this script to scan and determine the version of a Citrix NetScaler device over HTTP.
+You can use this script to scan and determine the version of a Citrix NetScaler device over HTTP(s).
+It will also determine if the NetScaler is vulnerable to specific CVEs based on the version.
 
 ## Installing `scan-citrix-netscaler-version.py`
 
@@ -18,7 +19,7 @@ Use the following steps if you are using pip:
 3. pip install httpx
 4. python3 scan-citrix-netscaler-version.py --help
 
-In case of `uv`, you can run the script directly using:
+In case of [uv](https://docs.astral.sh/uv/), you can run the script directly using:
 
 1. uv run https://raw.githubusercontent.com/fox-it/citrix-netscaler-triage/refs/heads/main/scan-citrix-netscaler-version.py
 
@@ -73,6 +74,7 @@ $ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --cve CVE-2025-6
 }
 ```
 
+To get the results in CSV format, just use the `--csv` flag.
 For more options see `--help`.
 
 # iocitrix.py

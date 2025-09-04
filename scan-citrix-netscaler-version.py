@@ -13,6 +13,8 @@
 # This script scans a remote Citrix NetScaler device to determine the version based on a GZIP timestamp in a resource file.
 # The version hash is not always present anymore since our blog, so we need to rely on this timestamp metadata.
 #
+# It will also determine if the NetScaler is vulnerable to specific CVEs based on the version.
+#
 # Blog on how to fingerprint Citrix NetScaler devices using timestamp metadata of a GZIP file or hash:
 #  - https://blog.fox-it.com/2022/12/28/cve-2022-27510-cve-2022-27518-measuring-citrix-adc-gateway-version-adoption-on-the-internet/
 #
@@ -305,27 +307,27 @@ KYELLOW = "\x1b[33m"
 KNORM = "\033[0m"
 
 
-def bold(text):
+def bold(text: str) -> str:
     return KBOLD + text + KNORM
 
 
-def cyan(text):
+def cyan(text: str) -> str:
     return KCYAN + text + KNORM
 
 
-def green(text):
+def green(text: str) -> str:
     return KGREEN + text + KNORM
 
 
-def red(text):
+def red(text: str) -> str:
     return KRED + text + KNORM
 
 
-def yellow(text):
+def yellow(text: str) -> str:
     return KYELLOW + text + KNORM
 
 
-def nocolor(text):
+def nocolor(text: str) -> str:
     return text
 
 
@@ -344,7 +346,7 @@ def temporary_ssl_verify_mode(ssl_ctx: ssl.SSLContext, new_mode: ssl.VerifyMode)
 
 
 # ============================================================================
-# Vulnerability check functions
+# Vulnerability check logic
 # ============================================================================
 class VersionTuple(NamedTuple):
     major: int
