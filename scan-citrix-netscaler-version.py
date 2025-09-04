@@ -670,22 +670,29 @@ def main() -> None:
         "-v", "--verbose", action="count", default=0, help="increase verbosity"
     )
     parser.add_argument(
-        "--json",
+        "-q",
+        "--no-unknown",
+        action="store_true",
+        default=False,
+        help="don't output results with unknown version",
+    )
+    parser.add_argument(
         "-j",
+        "--json",
         action="store_true",
         default=False,
         help="output scan results as JSON",
     )
     parser.add_argument(
-        "--csv",
         "-C",
+        "--csv",
         action="store_true",
         default=False,
         help="output scan results as CSV",
     )
     parser.add_argument(
-        "--cve",
         "-c",
+        "--cve",
         help="limit CVEs to check instead of all, e.g. CVE-2025-6543,CVE-2025-7775",
     )
     args = parser.parse_args()
@@ -712,7 +719,8 @@ def main() -> None:
     for cve in cves_to_check:
         if cve not in available_cves:
             parser.error(
-                f"Unknown CVE: {cve!r}, available CVEs are:\n - " + "\n - ".join(available_cves)
+                f"Unknown CVE: {cve!r}, available CVEs are:\n - "
+                + "\n - ".join(available_cves)
             )
 
     client = httpx.Client(verify=ssl_ctx, timeout=args.timeout)
@@ -734,6 +742,10 @@ def main() -> None:
                 version=None,
                 error=str(exc),
             )
+
+        # Skip targets that return unknown version
+        if args.no_unknown and version.version in (None, "unknown"):
+            continue
 
         # Check version for vulnerabilities
         cve_results: dict[str, bool] = {cve: False for cve in cves_to_check}
