@@ -3,7 +3,7 @@
 This repository contains triage scripts for Citrix NetScaler devices:
 
 * `iocitrix.py` -- a Dissect script to Triage a Citrix NetScaler image/target.
-* `scan-citrix-netscaler-version.py` -- Scan and fingerprint the version of a Citrix NetScaler device over HTTP(s).
+* `scan-citrix-netscaler-version.py` -- Scan and fingerprint the version of a NetScaler device over HTTP(s).
 
 # scan-citrix-netscaler-version.py
 
@@ -35,6 +35,8 @@ Or get the results in JSON:
 
 ```shell
 $ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --json | jq
+```
+```json
 {
   "scanned_at": "2025-09-03T23:11:36.864228+00:00",
   "target": "https://192.168.1.11",
@@ -59,6 +61,8 @@ It's also possible to limit vulnerability status checks to specific CVEs by usin
 
 ```shell
 $ python3 scan-citrix-netscaler-version.py https://192.168.1.11 --cve CVE-2025-6543 --json | jq
+```
+```json
 {
   "scanned_at": "2025-09-03T23:16:36.573016+00:00",
   "target": "https://192.168.1.11",
