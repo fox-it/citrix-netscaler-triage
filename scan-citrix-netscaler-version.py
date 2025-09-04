@@ -736,7 +736,7 @@ def main() -> None:
             )
 
         # Check version for vulnerabilities
-        vulnerable_map: dict[str, bool] = {}
+        cve_results: dict[str, bool] = {cve: False for cve in cves_to_check}
         try:
             vtuple = parse_version(version.version)
         except ValueError:
@@ -745,12 +745,12 @@ def main() -> None:
             for cve in cves_to_check:
                 vuln_check = CVE_CHECKS[cve]
                 logging.info(f"Checking {cve} on {target}")
-                vulnerable_map[cve] = vuln_check(vtuple)
-                if vulnerable_map[cve]:
+                cve_results[cve] = vuln_check(vtuple)
+                if cve_results[cve]:
                     logging.debug(f"VULNERABLE: {cve} on {target}")
 
         # Determine if the target is vulnerable
-        is_vulnerable = any(vulnerable_map.values()) if vulnerable_map else False
+        is_vulnerable = any(cve_results.values()) if cve_results else False
 
         # Output as JSON or CSV
         if args.json or args.csv:
@@ -759,7 +759,7 @@ def main() -> None:
                 rdx_en_dt=version.rdx_en_dt.isoformat() if version.rdx_en_dt else None
             )
             jdict.update(version._asdict())
-            jdict.update({"vulnerable": vulnerable_map})
+            jdict.update({"vulnerable": cve_results})
             jdict.update({"is_vulnerable": is_vulnerable})
 
             if args.csv:
