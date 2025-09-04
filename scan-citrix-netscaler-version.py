@@ -712,7 +712,7 @@ def main() -> None:
     for cve in cves_to_check:
         if cve not in available_cves:
             parser.error(
-                f"Unknown CVE: {cve!r}, available CVEs are:\n - {"\n - ".join(available_cves)}"
+                f"Unknown CVE: {cve!r}, available CVEs are:\n - " + "\n - ".join(available_cves)
             )
 
     client = httpx.Client(verify=ssl_ctx, timeout=args.timeout)
