@@ -141,32 +141,31 @@ The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is
 The following commands can be used on a local linux machine to create disk of your NetScaler over SSH:
 
 #### Check the expected image size **before running `dd`** by checking the disk's size on the NetScaler.
- Run:
-```
-ssh nsroot@<YOUR-NETSCALER-IP> shell
-gpart show
-```
- Or:
-```
-ssh nsroot@<YOUR-NETSCALER-IP> shell
-diskinfo /dev/da0
-```
- `diskinfo` will show the sector count and sector size. The image size is:
- **sectors × bytes per sector**
- For example, if you see:
-```
-/dev/da0   2097152  512  1073741824
-```
- the image will be approximately **1 GiB**.
- For your commands, `da0.img` should therefore be roughly the size of `/dev/da0`, while `md0.img` will be roughly the size of `/dev/md0`.
- You can also check available space on your **local Linux machine** beforehand with:
+Sure — here’s the updated section in the same format as your original instructions:
 
+#### Check your local system's disk space
 ```shell
-df -h .
+local ~ $ df -h .
 ```
- Make sure you have enough free space for both images.
- 
+#### Check the disks and their sizes first
+ This will show the available disks, including whether your persistent disk is `/dev/da0` or `/dev/ada0`.
+ Then check the exact size:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/da0
+```
 
+ For the RAM disk:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/md0
+```
+
+ **Before creating the images**, use the previous commands to determine how much local disk space you need.
+ Then create the images as before:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
+```
+ The resulting `da0.img` will be approximately the size of the `/dev/da0` device, and `md0.img` approximately the size of `/dev/md0`.
+ 
 
 #### Create a disk image of the `/dev/da0` disk to your local machine
 
