@@ -137,7 +137,35 @@ A Citrix NetScaler exposes two important block devices which can imaged for offl
 
 The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is a volatile disk. This disk can be found at `/dev/md0` when the NetScaler is powered-on and running, and will be unavailable when the NetScaler is powered-off. The `/var` and `/flash` directories reside on the `/dev/da0` disk as two separate partitions and is persistent.
 
+
 The following commands can be used on a local linux machine to create disk of your NetScaler over SSH:
+
+#### Check the expected image size **before running `dd`** by checking the disk's size on the NetScaler.
+Sure — here’s the updated section in the same format as your original instructions:
+
+#### Check your local system's disk space
+```shell
+local ~ $ df -h .
+```
+#### Check the disks and their sizes first
+ This will show the available disks, including whether your persistent disk is `/dev/da0` or `/dev/ada0`.
+ Then check the exact size:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/da0
+```
+
+ For the RAM disk:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/md0
+```
+
+ **Before creating the images**, use the previous commands to determine how much local disk space you need.
+ Then create the images as before:
+```shell
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
+```
+ The resulting `da0.img` will be approximately the size of the `/dev/da0` device, and `md0.img` approximately the size of `/dev/md0`.
+ 
 
 #### Create a disk image of the `/dev/da0` disk to your local machine
 
