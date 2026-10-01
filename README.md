@@ -162,8 +162,8 @@ local ~ $ df -h .
 ```
  Make sure that there is enough space available to accomodate the disk image files, whose file sizes were calculated in the previous step.
 
-#### 3. Create a disk image of the `/dev/da0`/`/dev/ada0` disk to your local machine
-
+#### 3. Create a disk image of the `/dev/da0` or `/dev/ada0` disk to your local machine
+ Depending on your disk name, execute either
 ```shell 
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/da0 bs=10M | tail -c +7 | head -c -6 > da0.img
 ```
