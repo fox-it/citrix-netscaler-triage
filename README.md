@@ -175,19 +175,24 @@ Do note, that this can take some time to complete. No progess is shown when usin
 It is adviced to wait until you gain control back over the prompt. This is an indication that `dd` finished.
 
 #### 4. (optional) Create a disk image of the `/dev/md0` disk to your local machine
- Though optional, it is recommended to create disk images of both `/dev/md0` and `/dev/da0`/`/dev/ada0`. This step could be skipped, though this can cause `iocitrix.py` to miss certains incicators of compromise.
+ This step could be skipped, though this can cause `iocitrix.py` to miss certains incicators of compromise. Therefore it is recommended to create disk images of both `/dev/md0` and `/dev/da0`/`/dev/ada0`.
  
 ```shell
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
 ```
 
-### Running `iocitrix.py` on your images
+### 5. Running `iocitrix.py` on your images
 
 After executing the previous commands on your local machine, the `da0.img` and `md0.img` files will be present. You can point `iocitrix` to these files to start triaging your images. Use the following command to do so:
 
 ```shell
 local ~ $ python3 iocitrix.py md0.img+da0.img
 ```
+or
+```shell
+local ~ $ python3 iocitrix.py md0.img+ada0.img
+```
+
 
 Example output:
 ```
