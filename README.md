@@ -133,57 +133,53 @@ The `+` (plus) sign will load the two disk images as a single Dissect Target.
 
 A Citrix NetScaler exposes two important block devices which can imaged for offline forensic analysis. These block device files can be found at the following paths:
 * `/dev/md0`: The disk that holds the root (`/`) directory. This is a RAM disk
-* `/dev/da0`: The disk that holds the `/var` and `/flash` directories. This is a persistent disk.
+* `/dev/da0` or `/dev/ada0`: The disk that holds the `/var` and `/flash` directories. This is a persistent disk.
 
-The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is a volatile disk. This disk can be found at `/dev/md0` when the NetScaler is powered-on and running, and will be unavailable when the NetScaler is powered-off. The `/var` and `/flash` directories reside on the `/dev/da0` disk as two separate partitions and is persistent.
+The root directory (`/`) of Citrix NetScaler is a RAM disk, meaning that this is a volatile disk. This disk can be found at `/dev/md0` when the NetScaler is powered-on and running, and will be unavailable when the NetScaler is powered-off. The `/var` and `/flash` directories reside on the `/dev/da0` or `/dev/ada0` disk as two separate partitions and are persistent.
 
 
-The following commands can be used on a local linux machine to create disk of your NetScaler over SSH:
+The following commands can be used on a local Linux machine to create disk copies of your NetScaler over SSH. If you are using Windows, you can use WSL (`wsl.exe`) or Git Bash (`git-bash.exe`) to use the same commands. Refrain from using native PowerShell commands, as PowerShell doesn't properly handle streaming raw binary data over SSH.
 
-#### Check the expected image size **before running `dd`** by checking the disk's size on the NetScaler.
-Sure — here’s the updated section in the same format as your original instructions:
 
-#### Check your local system's disk space
-```shell
-local ~ $ df -h .
-```
-#### Check the disks and their sizes first
+#### 1. Check the expected image sizes by checking the disk sizes on the NetScaler.
  This will show the available disks, including whether your persistent disk is `/dev/da0` or `/dev/ada0`.
  Then check the exact size:
 ```shell
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/da0
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/ada0
 ```
 
  For the RAM disk:
 ```shell
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell diskinfo /dev/md0
 ```
-
- **Before creating the images**, use the previous commands to determine how much local disk space you need.
- Then create the images as before:
-```shell
-local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
-```
- The resulting `da0.img` will be approximately the size of the `/dev/da0` device, and `md0.img` approximately the size of `/dev/md0`.
  
+ The resulting `da0.img` or `ada0.img` will be approximately the size of the respective device, and `md0.img` approximately the size of `/dev/md0`.
+ 
+#### 2. Check your local system's disk space
+```shell
+local ~ $ df -h .
+```
+ Make sure that there is enough space available to accomodate the disk image files, whose file sizes were calculated in the previous step.
 
-#### Create a disk image of the `/dev/da0` disk to your local machine
+#### 3. Create a disk image of the `/dev/da0`/`/dev/ada0` disk to your local machine
 
 ```shell 
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/da0 bs=10M | tail -c +7 | head -c -6 > da0.img
 ```
-
+ or
+```shell 
+local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/ada0 bs=10M | tail -c +7 | head -c -6 > ada0.img
+```
 Do note, that this can take some time to complete. No progess is shown when using `dd`. 
 It is adviced to wait until you gain control back over the prompt. This is an indication that `dd` finished.
 
-Also if you don't have `/dev/da0` it's most likely `/dev/ada0`, you can verify using the `mount` or `gpart show` command.
-
-#### Create a disk image of the `/dev/md0` disk to your local machine
+#### 4. (optional) Create a disk image of the `/dev/md0` disk to your local machine
+ Though optional, it is recommended to create disk images of both `/dev/md0` and `/dev/da0`/`/dev/ada0`. This step could be skipped, though this can cause `iocitrix.py` to miss certains incicators of compromise.
+ 
 ```shell
 local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/md0 bs=10M | tail -c +7 | head -c -6 > md0.img
 ```
-
-**NOTE**: While it is recommended to create disk images of both `/dev/md0` and `/dev/da0`. Creating a disk image of `/dev/md0` is optional. This step could be skipped, though this can cause `iocitrix.py` to miss certains incicators of compromise.
 
 ### Running `iocitrix.py` on your images
 
