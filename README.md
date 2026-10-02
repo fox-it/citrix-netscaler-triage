@@ -174,6 +174,8 @@ local ~ $ ssh nsroot@<YOUR-NETSCALER-IP> shell dd if=/dev/ada0 bs=10M | tail -c 
 Do note, that this can take some time to complete. No progess is shown when using `dd`. 
 It is adviced to wait until you gain control back over the prompt. This is an indication that `dd` finished.
 
+The `tail` and `head` commands are used to strip out the NetScaler SSH banners from the bytestream. Be aware that NetScaler SSH banners may change over time, in which case you should manually edit the command.
+
 #### 4. (optional) Create a disk image of the `/dev/md0` disk to your local machine
  This step could be skipped, though this can cause `iocitrix.py` to miss certains incicators of compromise. Therefore it is recommended to create disk images of both `/dev/md0` and `/dev/da0` or `/dev/ada0`.
  
